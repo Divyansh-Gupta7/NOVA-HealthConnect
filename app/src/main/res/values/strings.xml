@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">NOVA - Health Connect</string>
+    <string name="health_connect_rationale">NOVA accesses your steps, sleep sessions, calories, and heart rate from Health Connect to calibrate your daily equilibrium score, correlate sleep duration with deep work focus, and provide grounded AI wellness insights.</string>
+    <string name="privacy_policy_title">NOVA Privacy Commitment</string>
+</resources>

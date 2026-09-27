@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nova_teal">#00685F</color>
+    <color name="nova_teal_dark">#005049</color>
+    <color name="nova_mint">#D8F5EF</color>
+    <color name="nova_purple">#712AE2</color>
+    <color name="nova_dark">#131B2E</color>
+    <color name="nova_background">#FAF8FF</color>
+    <color name="nova_card">#FFFFFF</color>
+    <color name="nova_border">#DAE2FD</color>
+</resources>
