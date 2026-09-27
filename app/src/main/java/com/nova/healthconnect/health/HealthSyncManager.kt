@@ -27,6 +27,9 @@ import com.nova.healthconnect.data.models.SexualActivityMetric
 import com.nova.healthconnect.data.models.TimestampMetric
 import com.nova.healthconnect.data.models.WindowMetric
 import com.nova.healthconnect.data.models.WindowedValueMetric
+import com.nova.healthconnect.data.models.SyncValidationException
+import com.nova.healthconnect.data.models.SyncAuthException
+import com.nova.healthconnect.data.models.SyncServerException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -89,18 +92,29 @@ class HealthSyncManager(
         _syncState.value = SyncState.Syncing
 
         return try {
-            // Determine the read window
             val now = Instant.now()
-            val sinceTime = if (forceFullRead) null else getLastSyncTime()
+            val midnight = now.atZone(ZoneId.systemDefault())
+                .toLocalDate()
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
 
-            // Read from Health Connect — returns only real data, no fake fallback
-            val healthData = healthConnectManager.readToday()
+            val lastSync = if (forceFullRead) null else getLastSyncTime()
+            // 5-minute safety overlap to catch late-arriving wearable writes
+            val sinceTime = lastSync?.minus(java.time.Duration.ofMinutes(5))
+            val windowStart = sinceTime ?: midnight
+
+            // Read from Health Connect using the incremental time boundary
+            val healthData = healthConnectManager.readHealthData(
+                windowStart = windowStart,
+                windowEnd = now,
+                sinceTime = sinceTime
+            )
             _lastHealthData.value = healthData
 
-            // Build the legacy summary for screens still using the old model
+            // Build the legacy summary for UI dashboard
             _cachedMetrics.value = healthData.toLegacyPayload()
 
-            // Build and post the rich payload to NOVA backend
+            // Build and post the rich schema_version 2 payload to NOVA backend
             val richRequest = NovaHealthSyncRequest(
                 syncTimestamp = now.toString(),
                 windowStart = healthData.readWindowStart.toString(),
@@ -110,24 +124,28 @@ class HealthSyncManager(
                 metrics = healthData.toNovaHealthMetrics()
             )
 
-            try {
-                val response = RetrofitClient.getService().syncHealthConnectData(
-                    // Fall back to the legacy endpoint until backend supports schema v2
-                    HealthSyncRequest(
-                        syncTimestamp = now.toString(),
-                        date = LocalDate.now().toString(),
-                        metrics = healthData.toLegacyPayload()
-                    )
-                )
-                if (!response.isSuccessful) {
-                    Log.w(TAG, "Backend sync returned ${response.code()}: ${response.message()}")
+            // Transmit to NOVA backend
+            val response = RetrofitClient.getService().syncHealthConnectData(richRequest)
+            if (!response.isSuccessful) {
+                val code = response.code()
+                val errBody = response.errorBody()?.string() ?: ""
+                val msg = "Backend sync failed with HTTP $code: ${response.message()} - $errBody"
+                Log.e(TAG, msg)
+                throw when (code) {
+                    400 -> SyncValidationException(msg)
+                    401 -> SyncAuthException(msg)
+                    else -> SyncServerException(msg)
                 }
-            } catch (e: Exception) {
-                // Network failure is non-fatal: HC data is still captured locally
-                Log.w(TAG, "Backend unreachable during sync: ${e.message}")
             }
 
-            // Update last-sync timestamp and state
+            val respBody = response.body()
+            if (respBody?.success != true) {
+                val err = respBody?.error?.message ?: "Backend rejected sync payload"
+                Log.e(TAG, "Backend sync rejected: $err")
+                throw SyncServerException(err)
+            }
+
+            // Advance last-sync timestamp ONLY after confirmed backend ingestion
             saveLastSyncTime(now)
 
             val formatter = DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault())
@@ -140,7 +158,7 @@ class HealthSyncManager(
 
             _lastSyncTime.value = formattedTime
             _syncState.value = SyncState.Success(
-                "Synced ${healthData.totalRecords()} records from Health Connect",
+                "Synced ${healthData.totalRecords()} records to NOVA",
                 formattedTime
             )
 
@@ -148,8 +166,9 @@ class HealthSyncManager(
 
         } catch (e: Exception) {
             val msg = e.localizedMessage ?: "Sync failed"
-            Log.e(TAG, "Sync error: $msg", e)
+            Log.e(TAG, "Health sync failed: $msg", e)
             _syncState.value = SyncState.Error(msg)
+            prefs.edit().putString("last_sync_status", "FAILED").apply()
             Result.failure(e)
         }
     }
@@ -183,11 +202,12 @@ class HealthSyncManager(
 
 // ---------------------------------------------------------------------------
 // Mapping: NovaHealthData → NovaHealthMetrics (for the rich JSON payload)
+// Maps record_id from NovaRecordOrigin to enable backend deduplication
 // ---------------------------------------------------------------------------
 
 private fun NovaHealthData.toNovaHealthMetrics(): NovaHealthMetrics = NovaHealthMetrics(
     steps = steps.map {
-        StepMetric(it.count, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp)
+        StepMetric(it.count, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     sleep = sleep.map { session ->
         SleepMetric(
@@ -197,68 +217,69 @@ private fun NovaHealthData.toNovaHealthMetrics(): NovaHealthMetrics = NovaHealth
             stages = session.stages.map { stage ->
                 SleepStageMetric(stage.stage, stage.startTime.toString(), stage.endTime.toString(), stage.durationMinutes)
             },
-            sourceApp = session.origin?.sourceApp
+            sourceApp = session.origin?.sourceApp,
+            recordId = session.origin?.recordId
         )
     },
     heartRate = heartRate.map {
-        HeartRateMetric(it.bpm, it.measuredAt.toString(), it.origin?.sourceApp)
+        HeartRateMetric(it.bpm, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     restingHeartRate = restingHeartRate.map {
-        SingleValueMetric(it.bpm.toDouble(), it.measuredAt.toString(), it.origin?.sourceApp)
+        SingleValueMetric(it.bpm.toDouble(), it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     heartRateVariability = heartRateVariability.map {
-        SingleValueMetric(it.rmssdMillis, it.measuredAt.toString(), it.origin?.sourceApp)
+        SingleValueMetric(it.rmssdMillis, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     bloodPressure = bloodPressure.map {
-        BloodPressureMetric(it.systolicMmHg, it.diastolicMmHg, it.measuredAt.toString(), it.origin?.sourceApp)
+        BloodPressureMetric(it.systolicMmHg, it.diastolicMmHg, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     bloodGlucose = bloodGlucose.map {
-        SingleValueMetric(it.mmolPerLiter, it.measuredAt.toString(), it.origin?.sourceApp)
+        SingleValueMetric(it.mmolPerLiter, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     oxygenSaturation = oxygenSaturation.map {
-        SingleValueMetric(it.percentageSpo2, it.measuredAt.toString(), it.origin?.sourceApp)
+        SingleValueMetric(it.percentageSpo2, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     bodyTemperature = bodyTemperature.map {
-        SingleValueMetric(it.celsius, it.measuredAt.toString(), it.origin?.sourceApp)
+        SingleValueMetric(it.celsius, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     skinTemperature = skinTemperature.map {
-        SkinTemperatureMetric(it.deltaCelsius, it.baselineCelsius, it.measurementLocation, it.measuredAt.toString(), it.origin?.sourceApp)
+        SkinTemperatureMetric(it.deltaCelsius, it.baselineCelsius, it.measurementLocation, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     respiratoryRate = respiratoryRate.map {
-        SingleValueMetric(it.breathsPerMinute, it.measuredAt.toString(), it.origin?.sourceApp)
+        SingleValueMetric(it.breathsPerMinute, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     activeCalories = activeCalories.map {
-        WindowedValueMetric(it.kilocalories, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp)
+        WindowedValueMetric(it.kilocalories, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     totalCalories = totalCalories.map {
-        WindowedValueMetric(it.kilocalories, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp)
+        WindowedValueMetric(it.kilocalories, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     distance = distance.map {
-        WindowedValueMetric(it.meters, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp)
+        WindowedValueMetric(it.meters, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
     exercise = exercise.map {
-        ExerciseMetric(it.exerciseType, it.title, it.sessionStart.toString(), it.sessionEnd.toString(), it.durationMinutes, it.distanceMeters, it.origin?.sourceApp)
+        ExerciseMetric(it.exerciseType, it.title, it.sessionStart.toString(), it.sessionEnd.toString(), it.durationMinutes, it.distanceMeters, it.origin?.sourceApp, it.origin?.recordId)
     },
-    weight = weight.map { SingleValueMetric(it.kilograms, it.measuredAt.toString(), it.origin?.sourceApp) },
-    height = height.map { SingleValueMetric(it.meters, it.measuredAt.toString(), it.origin?.sourceApp) },
-    bodyFat = bodyFat.map { SingleValueMetric(it.percentage, it.measuredAt.toString(), it.origin?.sourceApp) },
-    leanBodyMass = leanBodyMass.map { SingleValueMetric(it.kilograms, it.measuredAt.toString(), it.origin?.sourceApp) },
-    boneMass = boneMass.map { SingleValueMetric(it.kilograms, it.measuredAt.toString(), it.origin?.sourceApp) },
-    basalMetabolicRate = basalMetabolicRate.map { SingleValueMetric(it.kilocaloriesPerDay, it.measuredAt.toString(), it.origin?.sourceApp) },
-    vo2Max = vo2Max.map { SingleValueMetric(it.mlPerKgPerMinute, it.measuredAt.toString(), it.origin?.sourceApp) },
+    weight = weight.map { SingleValueMetric(it.kilograms, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    height = height.map { SingleValueMetric(it.meters, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    bodyFat = bodyFat.map { SingleValueMetric(it.percentage, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    leanBodyMass = leanBodyMass.map { SingleValueMetric(it.kilograms, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    boneMass = boneMass.map { SingleValueMetric(it.kilograms, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    basalMetabolicRate = basalMetabolicRate.map { SingleValueMetric(it.kilocaloriesPerDay, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    vo2Max = vo2Max.map { SingleValueMetric(it.mlPerKgPerMinute, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
     nutrition = nutrition.map {
-        NutritionMetric(it.mealName, it.windowStart.toString(), it.windowEnd.toString(), it.energyKilocalories, it.proteinGrams, it.carbohydratesGrams, it.fatGrams, it.sugarGrams, it.sodiumGrams, it.fiberGrams, it.origin?.sourceApp)
+        NutritionMetric(it.mealName, it.windowStart.toString(), it.windowEnd.toString(), it.energyKilocalories, it.proteinGrams, it.carbohydratesGrams, it.fatGrams, it.sugarGrams, it.sodiumGrams, it.fiberGrams, it.origin?.sourceApp, it.origin?.recordId)
     },
     hydration = hydration.map {
-        WindowedValueMetric(it.liters, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp)
+        WindowedValueMetric(it.liters, it.windowStart.toString(), it.windowEnd.toString(), it.origin?.sourceApp, it.origin?.recordId)
     },
-    menstruationFlow = menstruationFlow.map { LabeledMetric(it.flowLevel, it.measuredAt.toString(), it.origin?.sourceApp) },
-    menstruationPeriod = menstruationPeriod.map { WindowMetric(it.periodStart.toString(), it.periodEnd.toString(), it.origin?.sourceApp) },
-    intermenstrualBleeding = intermenstrualBleeding.map { TimestampMetric(it.measuredAt.toString(), it.origin?.sourceApp) },
-    ovulationTest = ovulationTest.map { LabeledMetric(it.result, it.measuredAt.toString(), it.origin?.sourceApp) },
-    cervicalMucus = cervicalMucus.map { LabeledMetric(it.appearance, it.measuredAt.toString(), it.origin?.sourceApp) },
-    sexualActivity = sexualActivity.map { SexualActivityMetric(it.protectionUsed, it.measuredAt.toString(), it.origin?.sourceApp) },
-    basalBodyTemperature = basalBodyTemperature.map { BasalBodyTempMetric(it.celsius, it.bodyLocation, it.measuredAt.toString(), it.origin?.sourceApp) }
+    menstruationFlow = menstruationFlow.map { LabeledMetric(it.flowLevel, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    menstruationPeriod = menstruationPeriod.map { WindowMetric(it.periodStart.toString(), it.periodEnd.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    intermenstrualBleeding = intermenstrualBleeding.map { TimestampMetric(it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    ovulationTest = ovulationTest.map { LabeledMetric(it.result, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    cervicalMucus = cervicalMucus.map { LabeledMetric(it.appearance, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    sexualActivity = sexualActivity.map { SexualActivityMetric(it.protectionUsed, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) },
+    basalBodyTemperature = basalBodyTemperature.map { BasalBodyTempMetric(it.celsius, it.bodyLocation, it.measuredAt.toString(), it.origin?.sourceApp, it.origin?.recordId) }
 )
 
 // ---------------------------------------------------------------------------

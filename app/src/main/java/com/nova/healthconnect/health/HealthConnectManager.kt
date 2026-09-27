@@ -370,7 +370,7 @@ class HealthConnectManager(private val context: Context) {
                     totalDurationMinutes = Duration.between(r.startTime, r.endTime).toMinutes(),
                     stages = r.stages.map { stage ->
                         NovaSleepStage(
-                            stage = stage.stage.toNovaLabel(),
+                            stage = stage.stage.toSleepStageLabel(),
                             startTime = stage.startTime,
                             endTime = stage.endTime,
                             durationMinutes = Duration.between(stage.startTime, stage.endTime).toMinutes()
@@ -439,14 +439,28 @@ class HealthConnectManager(private val context: Context) {
                 )
             },
 
-            skinTemperature = skinTempRecords.map { r ->
-                NovaSkinTemperatureEntry(
-                    deltaCelsius = r.delta?.inCelsius ?: 0.0,
-                    baselineCelsius = r.baseline?.inCelsius,
-                    measurementLocation = r.measurementLocation,
-                    measuredAt = r.time,
-                    origin = r.metadata.toOrigin()
-                )
+            skinTemperature = skinTempRecords.flatMap { r ->
+                if (r.deltas.isNotEmpty()) {
+                    r.deltas.map { d ->
+                        NovaSkinTemperatureEntry(
+                            deltaCelsius = d.delta.inCelsius,
+                            baselineCelsius = r.baseline?.inCelsius,
+                            measurementLocation = r.measurementLocation,
+                            measuredAt = d.time,
+                            origin = r.metadata.toOrigin()
+                        )
+                    }
+                } else {
+                    listOf(
+                        NovaSkinTemperatureEntry(
+                            deltaCelsius = 0.0,
+                            baselineCelsius = r.baseline?.inCelsius,
+                            measurementLocation = r.measurementLocation,
+                            measuredAt = r.startTime,
+                            origin = r.metadata.toOrigin()
+                        )
+                    )
+                }
             },
 
             respiratoryRate = respRateRecords.map { r ->
@@ -486,15 +500,12 @@ class HealthConnectManager(private val context: Context) {
 
             exercise = exerciseRecords.map { r ->
                 NovaExerciseSession(
-                    exerciseType = r.exerciseType.toNovaLabel(),
+                    exerciseType = r.exerciseType.toExerciseTypeLabel(),
                     title = r.title,
                     sessionStart = r.startTime,
                     sessionEnd = r.endTime,
                     durationMinutes = Duration.between(r.startTime, r.endTime).toMinutes(),
-                    distanceMeters = r.segments
-                        .mapNotNull { it.repetitions.toLong().takeIf { _ -> false } }
-                        .sumOf { it.toDouble() }
-                        .takeIf { it > 0.0 },
+                    distanceMeters = null,
                     stepCount = null, // populated from steps data by the backend if needed
                     origin = r.metadata.toOrigin()
                 )
@@ -583,7 +594,7 @@ class HealthConnectManager(private val context: Context) {
 
             menstruationFlow = menstrFlowRecords.map { r ->
                 NovaMenstruationFlowEntry(
-                    flowLevel = r.flow.toNovaLabel(),
+                    flowLevel = r.flow.toMenstruationFlowLabel(),
                     measuredAt = r.time,
                     origin = r.metadata.toOrigin()
                 )
@@ -606,7 +617,7 @@ class HealthConnectManager(private val context: Context) {
 
             ovulationTest = ovulationRecords.map { r ->
                 NovaOvulationTestEntry(
-                    result = r.result.toNovaLabel(),
+                    result = r.result.toOvulationResultLabel(),
                     measuredAt = r.time,
                     origin = r.metadata.toOrigin()
                 )
@@ -614,7 +625,7 @@ class HealthConnectManager(private val context: Context) {
 
             cervicalMucus = cervicalRecords.map { r ->
                 NovaCervicalMucusEntry(
-                    appearance = r.appearance.toNovaLabel(),
+                    appearance = r.appearance.toCervicalMucusLabel(),
                     measuredAt = r.time,
                     origin = r.metadata.toOrigin()
                 )
@@ -622,7 +633,11 @@ class HealthConnectManager(private val context: Context) {
 
             sexualActivity = sexualActivityRecords.map { r ->
                 NovaSexualActivityEntry(
-                    protectionUsed = r.protectionUsed,
+                    protectionUsed = when (r.protectionUsed) {
+                        SexualActivityRecord.PROTECTION_USED_PROTECTED -> true
+                        SexualActivityRecord.PROTECTION_USED_UNPROTECTED -> false
+                        else -> null
+                    },
                     measuredAt = r.time,
                     origin = r.metadata.toOrigin()
                 )
@@ -631,7 +646,7 @@ class HealthConnectManager(private val context: Context) {
             basalBodyTemperature = basalBodyTempRecords.map { r ->
                 NovaBasalBodyTemperatureEntry(
                     celsius = r.temperature.inCelsius,
-                    bodyLocation = r.measurementLocation.toNovaLabel(),
+                    bodyLocation = r.measurementLocation.toBasalBodyTempLocationLabel(),
                     measuredAt = r.time,
                     origin = r.metadata.toOrigin()
                 )

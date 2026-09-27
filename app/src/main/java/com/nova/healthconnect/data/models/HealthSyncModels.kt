@@ -66,7 +66,8 @@ data class StepMetric(
     @SerializedName("count") val count: Long,
     @SerializedName("window_start") val windowStart: String,
     @SerializedName("window_end") val windowEnd: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class SleepStageMetric(
@@ -81,20 +82,23 @@ data class SleepMetric(
     @SerializedName("session_end") val sessionEnd: String,
     @SerializedName("total_duration_minutes") val totalDurationMinutes: Long,
     @SerializedName("stages") val stages: List<SleepStageMetric> = emptyList(),
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class HeartRateMetric(
     @SerializedName("bpm") val bpm: Long,
     @SerializedName("measured_at") val measuredAt: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class BloodPressureMetric(
     @SerializedName("systolic_mmhg") val systolicMmHg: Double,
     @SerializedName("diastolic_mmhg") val diastolicMmHg: Double,
     @SerializedName("measured_at") val measuredAt: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class SkinTemperatureMetric(
@@ -102,7 +106,8 @@ data class SkinTemperatureMetric(
     @SerializedName("baseline_celsius") val baselineCelsius: Double?,
     @SerializedName("location") val location: Int,
     @SerializedName("measured_at") val measuredAt: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class ExerciseMetric(
@@ -112,7 +117,8 @@ data class ExerciseMetric(
     @SerializedName("session_end") val sessionEnd: String,
     @SerializedName("duration_minutes") val durationMinutes: Long,
     @SerializedName("distance_meters") val distanceMeters: Double?,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class NutritionMetric(
@@ -126,57 +132,96 @@ data class NutritionMetric(
     @SerializedName("sugar_g") val sugarG: Double?,
     @SerializedName("sodium_g") val sodiumG: Double?,
     @SerializedName("fiber_g") val fiberG: Double?,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 // Simple reusable shapes
 data class SingleValueMetric(
     @SerializedName("value") val value: Double,
     @SerializedName("measured_at") val measuredAt: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class WindowedValueMetric(
     @SerializedName("value") val value: Double,
     @SerializedName("window_start") val windowStart: String,
     @SerializedName("window_end") val windowEnd: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class LabeledMetric(
     @SerializedName("label") val label: String,
     @SerializedName("measured_at") val measuredAt: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class TimestampMetric(
     @SerializedName("measured_at") val measuredAt: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class WindowMetric(
     @SerializedName("start") val start: String,
     @SerializedName("end") val end: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class SexualActivityMetric(
     @SerializedName("protection_used") val protectionUsed: Boolean?,
     @SerializedName("measured_at") val measuredAt: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 data class BasalBodyTempMetric(
     @SerializedName("celsius") val celsius: Double,
     @SerializedName("location") val location: String,
     @SerializedName("measured_at") val measuredAt: String,
-    @SerializedName("source_app") val sourceApp: String? = null
+    @SerializedName("source_app") val sourceApp: String? = null,
+    @SerializedName("record_id") val recordId: String? = null
 )
 
 // ---------------------------------------------------------------------------
-// Legacy model — kept for backward compat with existing NOVA backend endpoint.
-// The backend can use either this or NovaHealthSyncRequest.
-// Will be removed once the backend migrates to schema_version 2.
+// Backend Response Models (POST /api/health-connect/sync)
+// ---------------------------------------------------------------------------
+
+data class NovaHealthSyncResponse(
+    @SerializedName("success") val success: Boolean = false,
+    @SerializedName("data") val data: SyncResultData? = null,
+    @SerializedName("error") val error: ApiErrorData? = null
+)
+
+data class SyncResultData(
+    @SerializedName("syncId") val syncId: Long = 0,
+    @SerializedName("recordsProcessed") val recordsProcessed: Int = 0,
+    @SerializedName("recordsInserted") val recordsInserted: Int = 0,
+    @SerializedName("recordsDeduplicated") val recordsDeduplicated: Int = 0,
+    @SerializedName("syncTimestamp") val syncTimestamp: String = "",
+    @SerializedName("status") val status: String = ""
+)
+
+data class ApiErrorData(
+    @SerializedName("code") val code: String = "",
+    @SerializedName("message") val message: String = "",
+    @SerializedName("field") val field: String? = null
+)
+
+// ---------------------------------------------------------------------------
+// Sync Classification Exceptions
+// ---------------------------------------------------------------------------
+
+class SyncValidationException(message: String) : Exception(message)
+class SyncAuthException(message: String) : Exception(message)
+class SyncServerException(message: String) : Exception(message)
+
+// ---------------------------------------------------------------------------
+// Legacy model — kept for backward compat with dashboard calculations
 // ---------------------------------------------------------------------------
 data class HealthMetricsPayload(
     @SerializedName("steps") val steps: Long = 0,
@@ -201,3 +246,4 @@ data class HealthSyncResponse(
     val recordsProcessed: Int = 0,
     val syncedAt: String = ""
 )
+

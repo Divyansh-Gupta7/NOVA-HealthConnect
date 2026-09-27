@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.nova.healthconnect.NovaApplication
+import com.nova.healthconnect.data.models.SyncAuthException
+import com.nova.healthconnect.data.models.SyncValidationException
 
 private const val TAG = "NovaHealthSyncWorker"
 
@@ -28,10 +30,21 @@ class HealthSyncWorker(
                 Log.d(TAG, "Background sync complete — ${data.totalRecords()} records")
                 Result.success()
             } else {
-                val error = result.exceptionOrNull()?.message ?: "Unknown error"
-                Log.w(TAG, "Background sync failed: $error")
-                // Retry — WorkManager will back off automatically
-                Result.retry()
+                val ex = result.exceptionOrNull()
+                when (ex) {
+                    is SyncValidationException -> {
+                        Log.e(TAG, "Background sync permanent validation failure: ${ex.message}. Aborting retry.")
+                        Result.failure()
+                    }
+                    is SyncAuthException -> {
+                        Log.e(TAG, "Background sync authentication failure: ${ex.message}. Aborting retry.")
+                        Result.failure()
+                    }
+                    else -> {
+                        Log.w(TAG, "Background sync transient failure: ${ex?.message}. Retrying.")
+                        Result.retry()
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected worker error: ${e.message}", e)

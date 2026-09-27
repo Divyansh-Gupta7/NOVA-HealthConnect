@@ -8,8 +8,8 @@ import com.nova.healthconnect.data.models.CheckInResponse
 import com.nova.healthconnect.data.models.DashboardResponse
 import com.nova.healthconnect.data.models.FocusSessionRequest
 import com.nova.healthconnect.data.models.FocusSessionResponse
-import com.nova.healthconnect.data.models.HealthSyncRequest
-import com.nova.healthconnect.data.models.HealthSyncResponse
+import com.nova.healthconnect.data.models.NovaHealthSyncRequest
+import com.nova.healthconnect.data.models.NovaHealthSyncResponse
 import com.nova.healthconnect.data.models.LoginRequest
 import retrofit2.Response
 import retrofit2.http.Body
@@ -36,8 +36,8 @@ interface NovaApiService {
 
     @POST("health-connect/sync")
     suspend fun syncHealthConnectData(
-        @Body request: HealthSyncRequest
-    ): Response<HealthSyncResponse>
+        @Body request: NovaHealthSyncRequest
+    ): Response<NovaHealthSyncResponse>
 
     @POST("ai/chat")
     suspend fun sendAiChatMessage(

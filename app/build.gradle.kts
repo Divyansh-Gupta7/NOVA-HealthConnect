@@ -24,9 +24,6 @@ android {
         }
 
         buildConfigField("String", "DEFAULT_BACKEND_URL", "\"http://10.0.2.2:5000/api/\"")
-        androidResources {
-            localeFilters += listOf("en")
-        }
     }
 
     buildTypes {
@@ -108,4 +105,7 @@ dependencies {
     implementation(libs.play.services.auth)
 
     debugImplementation(libs.androidx.ui.tooling)
+
+    // Unit Testing
+    testImplementation("junit:junit:4.13.2")
 }
