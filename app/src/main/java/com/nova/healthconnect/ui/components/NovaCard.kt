@@ -21,17 +21,19 @@ import com.nova.healthconnect.ui.theme.NovaSurface
 fun NovaCard(
     modifier: Modifier = Modifier,
     backgroundColor: Color = NovaSurface,
+    containerColor: Color = backgroundColor,
     borderColor: Color = NovaBorderSoft,
     borderWidth: Dp = Dimensions.cardBorderWidth,
     elevation: Dp = 1.dp,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val effectiveColor = if (containerColor != NovaSurface) containerColor else backgroundColor
     Card(
         modifier = modifier
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         shape = NovaCardShape,
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        colors = CardDefaults.cardColors(containerColor = effectiveColor),
         border = BorderStroke(borderWidth, borderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {

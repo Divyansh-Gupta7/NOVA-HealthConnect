@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Sync
@@ -25,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,7 +39,9 @@ import com.nova.healthconnect.ui.theme.NovaTextPrimary
 fun NovaTopBar(
     userName: String = "Elena Vance",
     userStatus: String = "EQUILIBRIUM ACTIVE",
-    onOpenSettings: () -> Unit,
+    onOpenSettings: (() -> Unit)? = null,
+    onSyncClick: (() -> Unit)? = null,
+    isSyncing: Boolean = false,
     onLockTerminal: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -117,13 +117,26 @@ fun NovaTopBar(
                 }
             }
 
-            IconButton(onClick = onOpenSettings) {
-                Icon(
-                    imageVector = Icons.Rounded.Settings,
-                    contentDescription = "Settings",
-                    tint = NovaTeal,
-                    modifier = Modifier.size(22.dp)
-                )
+            if (onSyncClick != null) {
+                IconButton(onClick = onSyncClick) {
+                    Icon(
+                        imageVector = Icons.Rounded.Sync,
+                        contentDescription = "Sync",
+                        tint = NovaTeal,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            if (onOpenSettings != null) {
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = "Settings",
+                        tint = NovaTeal,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
         }
     }

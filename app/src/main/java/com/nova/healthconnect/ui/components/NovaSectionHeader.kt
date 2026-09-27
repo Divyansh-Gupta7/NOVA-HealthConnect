@@ -1,5 +1,6 @@
 package com.nova.healthconnect.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nova.healthconnect.ui.theme.NovaTeal
 import com.nova.healthconnect.ui.theme.NovaTextPrimary
 
@@ -20,6 +22,8 @@ fun NovaSectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     badge: String? = null,
+    actionText: String? = null,
+    onActionClick: (() -> Unit)? = null,
     action: (@Composable () -> Unit)? = null
 ) {
     Row(
@@ -45,8 +49,19 @@ fun NovaSectionHeader(
                 fontWeight = FontWeight.Bold
             )
         }
+
         if (action != null) {
             action()
+        } else if (!actionText.isNullOrBlank() && onActionClick != null) {
+            Text(
+                text = actionText.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp
+                ),
+                color = NovaTeal,
+                modifier = Modifier.clickable { onActionClick() }
+            )
         }
     }
 }

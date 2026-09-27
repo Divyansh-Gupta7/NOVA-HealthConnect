@@ -4,3 +4,9 @@ plugins {
     alias(libs.plugins.jetbrains.kotlin.android) apply false
     alias(libs.plugins.google.services) apply false
 }
+
+allprojects {
+    val buildBase = System.getenv("NOVA_BUILD_DIR") 
+        ?: "${System.getProperty("user.home")}/.gradle/builds/NovaHealthConnect/${project.name}"
+    layout.buildDirectory.set(file(buildBase))
+}

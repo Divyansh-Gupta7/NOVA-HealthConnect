@@ -17,6 +17,8 @@ val NovaVioletSoft = Color(0xFFF3EDFF)
 // Alerts / Status
 val NovaRose = Color(0xFFE11D48)
 val NovaRoseSoft = Color(0xFFFFECEF)
+val NovaRed = NovaRose
+val NovaGreen = Color(0xFF10B981)
 val NovaAmber = Color(0xFFD97706)
 val NovaAmberSoft = Color(0xFFFEF3C7)
 val NovaBlue = Color(0xFF0284C7)

@@ -156,3 +156,24 @@ fun ConcentricRingsView(
         }
     }
 }
+
+@Composable
+fun ConcentricRingsView(
+    ring1Progress: Float,
+    ring2Progress: Float,
+    ring3Progress: Float,
+    centerText: String,
+    centerLabel: String,
+    size: Dp = 140.dp,
+    modifier: Modifier = Modifier
+) {
+    val cleanScore = centerText.replace("%", "").trim().toIntOrNull() ?: 85
+    ConcentricRingsView(
+        focusPercent = ring1Progress * 100f,
+        burnPercent = ring2Progress * 100f,
+        sleepPercent = ring3Progress * 100f,
+        equilibriumScore = cleanScore,
+        size = size,
+        modifier = modifier
+    )
+}

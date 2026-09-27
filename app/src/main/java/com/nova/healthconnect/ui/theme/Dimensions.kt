@@ -13,6 +13,7 @@ object Dimensions {
     val space3XL = 32.dp
 
     val screenPaddingHorizontal = 18.dp
+    val ScreenPadding = 18.dp
     val cardPadding = 18.dp
     val cardElevation = 1.dp
     val cardBorderWidth = 1.dp
