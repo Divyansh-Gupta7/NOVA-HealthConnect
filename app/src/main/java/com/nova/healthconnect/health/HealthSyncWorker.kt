@@ -1,42 +1,40 @@
 package com.nova.healthconnect.health
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.nova.healthconnect.data.api.RetrofitClient
-import com.nova.healthconnect.data.models.HealthSyncRequest
-import java.time.Instant
-import java.time.LocalDate
+import com.nova.healthconnect.NovaApplication
 
+private const val TAG = "NovaHealthSyncWorker"
+
+/**
+ * WorkManager worker that performs a background health sync.
+ * Delegates entirely to [HealthSyncManager.syncNow] — no HC logic here.
+ */
 class HealthSyncWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        val healthConnectManager = HealthConnectManager(applicationContext)
-
+        Log.d(TAG, "Background sync starting")
         return try {
-            val metrics = healthConnectManager.readTodayHealthData()
-            val request = HealthSyncRequest(
-                syncTimestamp = Instant.now().toString(),
-                date = LocalDate.now().toString(),
-                deviceInfo = "Android Health Connect Background Sync",
-                metrics = metrics
-            )
+            val syncManager = NovaApplication.instance.healthSyncManager
+            val result = syncManager.syncNow(syncType = "interval")
 
-            val response = RetrofitClient.getService().syncHealthConnectData(request)
-            if (response.isSuccessful) {
-                val prefs = applicationContext.getSharedPreferences("nova_sync_prefs", Context.MODE_PRIVATE)
-                prefs.edit()
-                    .putString("last_sync_time", Instant.now().toString())
-                    .putString("last_sync_status", "SUCCESS")
-                    .apply()
+            if (result.isSuccess) {
+                val data = result.getOrThrow()
+                Log.d(TAG, "Background sync complete — ${data.totalRecords()} records")
                 Result.success()
             } else {
+                val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                Log.w(TAG, "Background sync failed: $error")
+                // Retry — WorkManager will back off automatically
                 Result.retry()
             }
         } catch (e: Exception) {
+            Log.e(TAG, "Unexpected worker error: ${e.message}", e)
             Result.retry()
         }
     }

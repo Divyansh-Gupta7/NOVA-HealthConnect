@@ -44,7 +44,8 @@ class OverviewViewModel : ViewModel() {
         viewModelScope.launch {
             val result = syncManager.syncNow()
             if (result.isSuccess) {
-                result.getOrNull()?.let { payload ->
+                // cachedMetrics is updated by syncNow() — use it to update the repository's dashboard
+                syncManager.cachedMetrics.value?.let { payload ->
                     repository.updateWithHealthConnectMetrics(payload)
                 }
             }
@@ -106,7 +107,7 @@ class HealthViewModel : ViewModel() {
         viewModelScope.launch {
             val result = syncManager.syncNow()
             if (result.isSuccess) {
-                result.getOrNull()?.let { payload ->
+                syncManager.cachedMetrics.value?.let { payload ->
                     repository.updateWithHealthConnectMetrics(payload)
                 }
             }
